@@ -1,0 +1,293 @@
+/**
+ * ITACHI-XMD-V2 — Serveur de pairing WhatsApp (web)
+ * Remplace la génération de code par terminal : chaque visiteur entre son
+ * numéro sur la page web, reçoit un code (ou scanne un QR), et obtient sa
+ * propre instance du bot connectée, avec toutes les commandes d'ITACHI-XMD-V2.
+ */
+require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
+const express = require('express');
+const pino = require('pino');
+const QRCode = require('qrcode');
+const { Boom } = require('@hapi/boom');
+const {
+    default: makeWASocket,
+    useMultiFileAuthState,
+    DisconnectReason,
+    fetchLatestBaileysVersion,
+    makeCacheableSignalKeyStore,
+    Browsers
+} = require('@whiskeysockets/baileys');
+
+const { handleMessages, handleGroupParticipantUpdate, handleStatus } = require('./main');
+const settings = require('./settings');
+const store = require('./lib/lightweight_store');
+
+store.readFromFile();
+setInterval(() => store.writeToFile(), settings.storeWriteInterval || 10000);
+
+global.botname = settings.botName || 'ITACHI-XMD';
+global.themeemoji = '•';
+
+const SESSIONS_DIR = path.join(__dirname, 'sessions');
+if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR, { recursive: true });
+
+// sessions[id] = { sock, status, qr, code, number }
+const sessions = {};
+
+function sanitizeId(id) {
+    return String(id).replace(/[^0-9a-zA-Z_]/g, '');
+}
+
+// ── Démarre (ou reprend) l'instance bot complète pour un numéro donné ──
+async function startUserSession(number, { usePairingCode = false } = {}) {
+    const id = sanitizeId(number);
+    if (sessions[id]?.sock && sessions[id].status === 'connected') return sessions[id];
+
+    const sessionDir = path.join(SESSIONS_DIR, id);
+    if (!fs.existsSync(sessionDir)) fs.mkdirSync(sessionDir, { recursive: true });
+
+    const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
+    const { version } = await fetchLatestBaileysVersion();
+
+    const sock = makeWASocket({
+        version,
+        logger: pino({ level: 'silent' }),
+        printQRInTerminal: false,
+        browser: usePairingCode ? Browsers.ubuntu('Chrome') : Browsers.macOS('Safari'),
+        auth: {
+            creds: state.creds,
+            keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'fatal' }).child({ level: 'fatal' })),
+        },
+        syncFullHistory: false,
+        markOnlineOnConnect: true
+    });
+
+    sessions[id] = {
+        sock,
+        status: usePairingCode ? 'requesting_code' : 'waiting_qr',
+        qr: null,
+        code: null,
+        number
+    };
+
+    // ── Demande du code de pairing (si pas encore enregistré) ──
+    if (usePairingCode && !state.creds.registered) {
+        try {
+            await new Promise(r => setTimeout(r, 1500)); // laisser le socket s'initialiser
+            const rawCode = await sock.requestPairingCode(number.replace(/[^0-9]/g, ''));
+            sessions[id].code = rawCode?.match(/.{1,4}/g)?.join('-') || rawCode;
+            sessions[id].status = 'waiting_code';
+        } catch (e) {
+            console.error(`❌ [${id}] Erreur génération pairing code:`, e.message);
+            sessions[id].status = 'error';
+            sessions[id].error = e.message;
+        }
+    }
+
+    sock.ev.on('creds.update', saveCreds);
+
+    sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect, qr } = update;
+
+        if (qr && !usePairingCode) {
+            sessions[id].qr = await QRCode.toDataURL(qr);
+            sessions[id].status = 'waiting_qr';
+        }
+
+        if (connection === 'open') {
+            sessions[id].status = 'connected';
+            sessions[id].qr = null;
+            sessions[id].code = null;
+            console.log(`✅ [${id}] ITACHI-XMD-V2 connecté (+${number}) !`);
+
+            try {
+                const ownJid = sock.user.id.split(':')[0].split('@')[0] + '@s.whatsapp.net';
+                const imgPath = path.join(__dirname, 'assets', 'bot_image.jpg');
+                const caption = `╔══✦*𝗜𝗧𝗔𝗖𝗛𝗜-𝗫𝗠𝗗*✦═══>
+║»🥷 *✅ BOT CONNECTÉ !*
+╠══════════════════
+║»📞 *Numéro :* +${number}
+║»⏰ *Heure :* ${new Date().toLocaleTimeString('fr-FR', { timeZone: 'GMT', hour: '2-digit', minute: '2-digit' })}
+║»🌐 *Système :* CENTRAL-HEX
+╚══════════════════>
+
+🎉 Ton bot est maintenant actif et opérationnel !
+💡 Tape *.menu* pour découvrir toutes les commandes.
+
+> 🥷 _by IBSACKO™ · CENTRAL-HEX_`;
+
+                if (fs.existsSync(imgPath)) {
+                    await sock.sendMessage(ownJid, { image: fs.readFileSync(imgPath), caption });
+                } else {
+                    await sock.sendMessage(ownJid, { text: caption });
+                }
+            } catch (e) {
+                console.error(`❌ [${id}] Message de bienvenue:`, e.message);
+            }
+        }
+
+        if (connection === 'close') {
+            const statusCode = lastDisconnect?.error instanceof Boom
+                ? lastDisconnect.error.output?.statusCode
+                : null;
+
+            // ── Cas important (flux "code de pairing") ──
+            // WhatsApp ferme systématiquement ce socket temporaire une fois le code
+            // utilisé sur le téléphone — Baileys ne le reconnecte PAS automatiquement.
+            // Il faut donc vérifier si les creds sont maintenant enregistrées et,
+            // si oui, considérer que c'est un succès et relancer une session propre.
+            const registered = !!sock.authState?.creds?.registered;
+            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+
+            if (registered && sessions[id].status !== 'connected') {
+                console.log(`♻️ [${id}] Pairing réussi (détecté à la fermeture), relance de la session...`);
+                setTimeout(() => startUserSession(number, { usePairingCode: false }), 2000);
+                return;
+            }
+
+            if (shouldReconnect) {
+                setTimeout(() => startUserSession(number, { usePairingCode: false }), 3000);
+            } else {
+                console.log(`🚪 [${id}] Déconnecté (logout). Session supprimée.`);
+                sessions[id].status = 'logged_out';
+                try { fs.rmSync(sessionDir, { recursive: true, force: true }); } catch {}
+            }
+        }
+    });
+
+    sock.ev.on('messages.upsert', async (chatUpdate) => {
+        try { await handleMessages(sock, chatUpdate, true); } catch (e) { console.error('handleMessages error:', e.message); }
+    });
+    sock.ev.on('group-participants.update', async (update) => {
+        try { await handleGroupParticipantUpdate(sock, update); } catch (e) { console.error('groupParticipants error:', e.message); }
+    });
+    sock.ev.on('messages.reaction', async (status) => {
+        try { await handleStatus(sock, status); } catch (e) { console.error('status error:', e.message); }
+    });
+
+    return sessions[id];
+}
+
+// Certaines commandes internes déclenchent un self-pairing depuis le chat
+global.startUserSession = startUserSession;
+
+function getSession(id) {
+    return sessions[sanitizeId(id)];
+}
+
+// ── Reprend automatiquement toutes les sessions déjà liées (survit à un redémarrage) ──
+async function resumeAllSessions() {
+    const ids = fs.readdirSync(SESSIONS_DIR, { withFileTypes: true })
+        .filter(d => d.isDirectory())
+        .map(d => d.name);
+
+    for (const id of ids) {
+        if (!fs.existsSync(path.join(SESSIONS_DIR, id, 'creds.json'))) continue;
+        console.log(`♻️ Reprise automatique de la session : ${id}`);
+        try { await startUserSession(id, { usePairingCode: false }); }
+        catch (e) { console.error(`❌ Échec reprise ${id}:`, e.message); }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+// 🌐 SERVEUR WEB
+// ═══════════════════════════════════════════════════════════
+const app = express();
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
+
+const PORT = process.env.PORT || 3000;
+
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// ── Demander un code de pairing pour un numéro ──
+app.post('/api/pair', async (req, res) => {
+    try {
+        const { number } = req.body;
+        const cleanNumber = String(number || '').replace(/[^0-9]/g, '');
+        if (!cleanNumber || cleanNumber.length < 8) {
+            return res.status(400).json({ error: 'Numéro invalide. Utilise le format international sans + (ex: 224666952949).' });
+        }
+
+        const sessionId = sanitizeId(cleanNumber);
+        await startUserSession(cleanNumber, { usePairingCode: true });
+
+        let tries = 0;
+        while (tries < 30) {
+            const s = getSession(sessionId);
+            if (s?.status === 'waiting_code' && s.code) return res.json({ sessionId, code: s.code });
+            if (s?.status === 'error') return res.status(500).json({ error: s.error || 'Erreur génération du code.' });
+            if (s?.status === 'connected') return res.json({ sessionId, connected: true });
+            await new Promise(r => setTimeout(r, 500));
+            tries++;
+        }
+        return res.status(504).json({ error: 'Le code met trop de temps à être généré, réessaie.' });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ── Démarrer une session en mode QR ──
+app.post('/api/qr', async (req, res) => {
+    try {
+        const sessionId = `qr_${Date.now()}`;
+        await startUserSession(sessionId, { usePairingCode: false });
+        res.json({ sessionId });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ── Vérifier l'état d'une session ──
+app.get('/api/status/:sessionId', (req, res) => {
+    const s = getSession(req.params.sessionId);
+    if (!s) return res.status(404).json({ error: 'Session introuvable' });
+    res.json({ status: s.status, qr: s.qr || null, code: s.code || null });
+});
+
+// ── Déconnecter / réinitialiser une session (efface tout, permet un nouveau pairing) ──
+app.post('/api/reset', async (req, res) => {
+    try {
+        const { number } = req.body;
+        const cleanNumber = String(number || '').replace(/[^0-9]/g, '');
+        if (!cleanNumber || cleanNumber.length < 8) {
+            return res.status(400).json({ error: 'Numéro invalide.' });
+        }
+
+        const id = sanitizeId(cleanNumber);
+        const sessionDir = path.join(SESSIONS_DIR, id);
+
+        if (sessions[id]?.sock) {
+            try { await sessions[id].sock.logout(); } catch (e) {}
+            try { sessions[id].sock.ws?.close(); } catch (e) {}
+        }
+        delete sessions[id];
+
+        if (fs.existsSync(sessionDir)) {
+            fs.rmSync(sessionDir, { recursive: true, force: true });
+        }
+
+        console.log(`🗑️ [${id}] Session réinitialisée manuellement.`);
+        res.json({ ok: true, message: 'Session réinitialisée. Tu peux relancer un pairing.' });
+    } catch (e) {
+        console.error('❌ [reset]', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/health', (req, res) => {
+    res.json({ ok: true, bot: 'ITACHI-XMD-V2', sessions: Object.keys(sessions).length });
+});
+
+app.listen(PORT, () => {
+    console.log(`🥷 ITACHI-XMD-V2 — serveur de pairing lancé sur http://localhost:${PORT}`);
+    resumeAllSessions().catch(e => console.error('resumeAllSessions error:', e.message));
+});
+
+process.on('uncaughtException', (err) => console.error('Uncaught Exception:', err));
+
