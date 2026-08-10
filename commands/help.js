@@ -113,7 +113,7 @@ async function helpCommand(sock, chatId, message) {
 ║ ⿻ ${p}fact → fait intéressant
 ║ ⿻ ${p}weather → météo
 ║ ⿻ ${p}news → actualités
-║ ⿻ ${p}journal → journal en français
+║ ⿻ ${p}journal → journal
 ║ ⿻ ${p}attp → texte en sticker
 ║ ⿻ ${p}lyrics → paroles musique
 ║ ⿻ ${p}8ball → boule magique
@@ -145,7 +145,7 @@ async function helpCommand(sock, chatId, message) {
 ║ ⿻ ${p}demote → retirer admin
 ║ ⿻ ${p}mute → muter groupe
 ║ ⿻ ${p}unmute → demuter groupe
-║ ⿻ ${p}delete → supprimer message
+║ ⿻ ${p}delete → supprimer mssg
 ║ ⿻ ${p}clear → nettoyer chat
 ║ ⿻ ${p}tagall → mentionner tous
 ║ ⿻ ${p}tag → tag avec message
@@ -159,10 +159,10 @@ async function helpCommand(sock, chatId, message) {
 ║ ⿻ ${p}setgpp → photo du groupe
 ║ ⿻ ${p}kickall → expulser tous
 ║ ⿻ ${p}purge → nettoyer chat
-║ ⿻ ${p}approve → approuver membre
-║ ⿻ ${p}totalmembers → total membres
-║ ⿻ ${p}sanction → sanctionner membre
-║ ⿻ ${p}autorecording → simulation audio
+║ ⿻ ${p}approve → approuver mmb
+║ ⿻ ${p}totalmembers → total mmb
+║ ⿻ ${p}sanction → sanctionner mmb
+║ ⿻ ${p}autorecording → simulation 
 ╚══════════════════❒
 
 ╔══════════════════🥷
@@ -174,7 +174,7 @@ async function helpCommand(sock, chatId, message) {
 ║ ⿻ ${p}antimention → anti-spam
 ║ ⿻ ${p}antisticker → anti-sticker
 ║ ⿻ ${p}antitag → anti-tag abusif
-║ ⿻ ${p}antimentionstatus → antimention
+║ ⿻ ${p}antimentions → antimention
 ║ ⿻ ${p}anticall → bloquer appels
 ║ ⿻ ${p}antidelete → anti-suppression
 ║ ⿻ ${p}antipurge → anti-purge abusive
@@ -205,13 +205,13 @@ async function helpCommand(sock, chatId, message) {
 ║ ⿻ ${p}setmenuimage → image menu
 ║ ⿻ ${p}menustyle → style menu
 ║ ⿻ ${p}autobio → bio automatique
-║ ⿻ ${p}maintenance → mode maintenance
+║ ⿻ ${p}maintenance → mode mtc
 ╚══════════════════❒
 
 ╔══════════════════🥷
 ║ ❍ 𝗘𝗗𝗜𝗧𝗜𝗡𝗚-𝗜𝗧𝗔𝗖𝗛𝗜 ❍
 ║ ⿻ ${p}sticker → creer sticker
-║ ⿻ ${p}stickersearch → chercher stickers
+║ ⿻ ${p}stickersearch → chrch stickers
 ║ ⿻ ${p}toimage → sticker image
 ║ ⿻ ${p}simage → sticker image
 ║ ⿻ ${p}take → modifier sticker
@@ -283,15 +283,10 @@ async function helpCommand(sock, chatId, message) {
 ║ ⿻ ${p}meta → infos Meta/WhatsApp
 ║ ⿻ ${p}footballnews → actus football
 ║ ⿻ ${p}itachi-info → histoire Itachi
-╚══════════════════❒
-
-╔══════════════════❒
-║ ❍ *𝗖𝗢𝗡𝗧𝗔𝗖𝗧𝗘𝗭-𝗠𝗢𝗜* ❍
-║ https://wa.me/224621963059
-╚══════════════════❒
+╚═══════════════════❒
 
 🥷══════════════════🥷
-      propulsé par *𝗜𝗕𝗦𝗔𝗖𝗞𝗢™*
+    propulsé par *𝗜𝗕𝗦𝗔𝗖𝗞𝗢™*
 🥷══════════════════🥷
 
 `;
