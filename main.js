@@ -1020,16 +1020,8 @@ async function handleMessages(sock, messageUpdate, printLog) {
                 await antibadwordCommand(sock, chatId, message, senderId, true);
                 break;
             case userMessage.startsWith('.chatbot'):
-                // Check if sender is admin or bot owner (en groupe) — en privé, tout le monde
-                // peut activer sa propre conversation
-                if (isGroup) {
-                    const chatbotAdminStatus = await isAdmin(sock, chatId, senderId);
-                    if (!chatbotAdminStatus.isSenderAdmin && !message.key.fromMe) {
-                        await sock.sendMessage(chatId, { text: '*Only admins or bot owner can use this command*', ...channelInfo }, { quoted: message });
-                        return;
-                    }
-                }
-
+                // Commande publique : n'importe qui peut activer/désactiver le chatbot,
+                // en groupe comme en privé.
                 const match = userMessage.slice(8).trim();
                 await handleChatbotCommand(sock, chatId, message, match);
                 break;
@@ -1885,4 +1877,3 @@ module.exports = {
         await handleAutoReact(sock, status);
     }
 };
-
