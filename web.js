@@ -41,15 +41,30 @@ function sanitizeId(id) {
 }
 
 // ── Démarre (ou reprend) l'instance bot complète pour un numéro donné ──
+const connectingLock = new Set();
+
 async function startUserSession(number, { usePairingCode = false } = {}) {
     const id = sanitizeId(number);
+    // ⚠️ Empêche deux connexions simultanées pour le même numéro (ex: reprise
+    // automatique au démarrage + un pairing lancé au même moment). WhatsApp
+    // n'accepte qu'une connexion à la fois par session — en avoir 2 en même
+    // temps fait que WhatsApp éjecte l'une des deux en boucle (déconnexions
+    // répétées toutes les quelques minutes).
     if (sessions[id]?.sock && sessions[id].status === 'connected') return sessions[id];
+    if (connectingLock.has(id)) return sessions[id];
+    connectingLock.add(id);
 
     const sessionDir = path.join(SESSIONS_DIR, id);
     if (!fs.existsSync(sessionDir)) fs.mkdirSync(sessionDir, { recursive: true });
 
-    const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-    const { version } = await fetchLatestBaileysVersion();
+    let state, saveCreds, version;
+    try {
+        ({ state, saveCreds } = await useMultiFileAuthState(sessionDir));
+        ({ version } = await fetchLatestBaileysVersion());
+    } catch (e) {
+        connectingLock.delete(id);
+        throw e;
+    }
 
     const sock = makeWASocket({
         version,
@@ -71,6 +86,7 @@ async function startUserSession(number, { usePairingCode = false } = {}) {
         code: null,
         number
     };
+    connectingLock.delete(id); // le socket existe désormais, plus besoin du verrou
 
     // ── Demande du code de pairing (si pas encore enregistré) ──
     if (usePairingCode && !state.creds.registered) {
@@ -290,4 +306,3 @@ app.listen(PORT, () => {
 });
 
 process.on('uncaughtException', (err) => console.error('Uncaught Exception:', err));
-
