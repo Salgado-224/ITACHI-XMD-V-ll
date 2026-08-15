@@ -121,6 +121,8 @@ async function handleChatbotCommand(sock, chatId, message, match) {
     });
 }
 
+const lastBotReply = new Map(); // chatId -> { text, timestamp } — anti-boucle
+
 async function handleChatbotResponse(sock, chatId, message, userMessage, senderId) {
     const data = loadUserGroupData();
     if (!data.chatbot[chatId]) return;
@@ -130,6 +132,15 @@ async function handleChatbotResponse(sock, chatId, message, userMessage, senderI
         // groupe ou privé, sans besoin de mention/réponse.
         let cleanedMessage = userMessage.replace(/@\d+/g, '').trim();
         if (!cleanedMessage) return;
+
+        // ⚠️ Anti-boucle : si ce message est fromMe ET correspond exactement à
+        // la dernière réponse que LE BOT a envoyée dans ce chat, c'est notre
+        // propre message qui revient (normal en self-chat) — on l'ignore pour
+        // éviter que le bot se réponde à lui-même à l'infini.
+        const last = lastBotReply.get(chatId);
+        if (message.key.fromMe && last && last.text === cleanedMessage && (Date.now() - last.timestamp) < 15000) {
+            return;
+        }
 
         // Initialize user's chat memory if not exists
         if (!chatMemory.messages.has(senderId)) {
@@ -164,8 +175,10 @@ async function handleChatbotResponse(sock, chatId, message, userMessage, senderI
         });
 
         if (!response) {
+            const fallbackText = "Hmm, let me think about that... 🤔\nI'm having trouble processing your request right now.";
+            lastBotReply.set(chatId, { text: fallbackText, timestamp: Date.now() });
             await sock.sendMessage(chatId, { 
-                text: "Hmm, let me think about that... 🤔\nI'm having trouble processing your request right now.",
+                text: fallbackText,
                 quoted: message
             });
             return;
@@ -173,6 +186,8 @@ async function handleChatbotResponse(sock, chatId, message, userMessage, senderI
 
         // Add human-like delay before sending response
         await new Promise(resolve => setTimeout(resolve, getRandomDelay()));
+
+        lastBotReply.set(chatId, { text: response, timestamp: Date.now() });
 
         // Send response as a reply with proper context
         await sock.sendMessage(chatId, {
@@ -191,8 +206,10 @@ async function handleChatbotResponse(sock, chatId, message, userMessage, senderI
         }
         
         try {
+            const errText = "Oops! 😅 I got a bit confused there. Could you try asking that again?";
+            lastBotReply.set(chatId, { text: errText, timestamp: Date.now() });
             await sock.sendMessage(chatId, { 
-                text: "Oops! 😅 I got a bit confused there. Could you try asking that again?",
+                text: errText,
                 quoted: message
             });
         } catch (sendError) {
@@ -255,4 +272,4 @@ Informations sur l'utilisateur : ${JSON.stringify(userContext.userInfo)}`;
 module.exports = {
     handleChatbotCommand,
     handleChatbotResponse
-};
+}; 
