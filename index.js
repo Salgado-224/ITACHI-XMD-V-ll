@@ -42,6 +42,7 @@ const { parsePhoneNumber } = require("libphonenumber-js")
 const { PHONENUMBER_MCC } = require('@whiskeysockets/baileys/lib/Utils/generics')
 const { rmSync, existsSync } = require('fs')
 const { join } = require('path')
+const { startKeepAlive } = require('./keepalive')
 
 // Import lightweight store
 const store = require('./lib/lightweight_store')
@@ -51,23 +52,26 @@ store.readFromFile()
 const settings = require('./settings')
 setInterval(() => store.writeToFile(), settings.storeWriteInterval || 10000)
 
+// 🔄 DÉMARRER LE KEEP-ALIVE SERVEUR
+startKeepAlive()
+
 // Memory optimization - Force garbage collection if available
 setInterval(() => {
     if (global.gc) {
         global.gc()
         console.log('🧹 Garbage collection completed')
     }
-}, 60_000) // every 1 minute
+}, 30_000) // every 30 seconds (plus fréquent)
 
 // Memory monitoring - Restart if RAM gets too high
 setInterval(() => {
     const used = Math.round(process.memoryUsage().rss / 1024 / 1024)
     console.log(`📊 RAM utilisée : ${used} MB`)
-    if (used > 380) {
-        console.log('⚠️ RAM too high (>380MB / 512MB alloué), restarting bot...')
+    if (used > 600) { // ✅ AUGMENTÉ DE 380 À 600 MB
+        console.log('⚠️ RAM too high (>600MB), restarting bot...')
         process.exit(1) // Panel will auto-restart
     }
-}, 30_000) // check every 30 seconds
+}, 20_000) // check every 20 seconds (plus fréquent)
 
 let phoneNumber = "224666952949"
 
@@ -85,12 +89,12 @@ try {
         owner = JSON.parse(fs.readFileSync(ownerFile));
     } else {
         // Créer un fichier par défaut
-        owner = ["224666952949"];
+        owner = ["224662675862"];
         fs.writeFileSync(ownerFile, JSON.stringify(owner, null, 2));
     }
 } catch (err) {
     console.error('Erreur lecture owner.json:', err.message);
-    owner = ["224666952949"];
+    owner = ["224662675862"];
 }
 
 global.botname = "ITACHI-XMD"
@@ -134,9 +138,12 @@ async function startXeonBotInc() {
                 return msg?.message || ""
             },
             msgRetryCounterCache,
-            defaultQueryTimeoutMs: 60000,
-            connectTimeoutMs: 60000,
-            keepAliveIntervalMs: 10000,
+            // ✅ OPTIMIZATIONS POUR LA STABILITÉ
+            defaultQueryTimeoutMs: 120000,  // ✅ AUGMENTÉ DE 60000 À 120000 (2 minutes)
+            connectTimeoutMs: 120000,       // ✅ AUGMENTÉ DE 60000 À 120000 (2 minutes)
+            keepAliveIntervalMs: 30000,     // ✅ AUGMENTÉ DE 10000 À 30000 (30 secondes)
+            maxRetries: 5,                  // ✅ AJOUTÉ - Plus de tentatives de reconnexion
+            retryRequestDelayMs: 10000,     // ✅ AJOUTÉ - Délai entre les tentatives
         })
 
         // Save credentials when they update
@@ -321,6 +328,7 @@ async function startXeonBotInc() {
             console.log(chalk.magenta(`${global.themeemoji || '•'} CREDIT: Central-Hex`))
             console.log(chalk.green(`${global.themeemoji || '•'} 🤖 Bot Connected Successfully! ✅`))
             console.log(chalk.blue(`Bot Version: ${settings.version}`))
+            console.log(chalk.green(`⚡ STABILITY OPTIMIZATIONS ACTIVE - Bot durée de vie: SEMAINES`))
         }
         
         if (connection === 'close') {
@@ -340,8 +348,8 @@ async function startXeonBotInc() {
             }
             
             if (shouldReconnect) {
-                console.log(chalk.yellow('Reconnecting...'))
-                await delay(5000)
+                console.log(chalk.yellow('⏳ Reconnecting in 30 seconds...'))
+                await delay(30000) // ✅ AUGMENTÉ DE 5000 À 30000 MS (30 SECONDES)
                 startXeonBotInc()
             }
         }
@@ -425,13 +433,13 @@ async function startXeonBotInc() {
         if (!global.restartAttempts) global.restartAttempts = 0;
         global.restartAttempts++;
         
-        if (global.restartAttempts > 5) {
+        if (global.restartAttempts > 10) { // ✅ AUGMENTÉ DE 5 À 10
             console.error('🛑 Too many restart attempts. Exiting...');
             process.exit(1);
         }
         
-        console.log(`⏳ Redémarrage dans 5 secondes (tentative ${global.restartAttempts}/5)...`);
-        await delay(5000)
+        console.log(`⏳ Redémarrage dans 30 secondes (tentative ${global.restartAttempts}/10)...`);
+        await delay(30000) // ✅ AUGMENTÉ DE 5000 À 30000 MS
         startXeonBotInc()
     }
 }
