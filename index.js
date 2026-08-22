@@ -89,12 +89,12 @@ try {
         owner = JSON.parse(fs.readFileSync(ownerFile));
     } else {
         // Créer un fichier par défaut
-        owner = ["224662675862"];
+        owner = ["224621963059"];
         fs.writeFileSync(ownerFile, JSON.stringify(owner, null, 2));
     }
 } catch (err) {
     console.error('Erreur lecture owner.json:', err.message);
-    owner = ["224662675862"];
+    owner = ["224621963059"];
 }
 
 global.botname = "ITACHI-XMD"
