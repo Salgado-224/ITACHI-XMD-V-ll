@@ -1,10 +1,21 @@
-/**
- * ITACHI-XMD-V2 — Serveur de pairing WhatsApp (web)
- * Remplace la génération de code par terminal : chaque visiteur entre son
- * numéro sur la page web, reçoit un code (ou scanne un QR), et obtient sa
- * propre instance du bot connectée, avec toutes les commandes d'ITACHI-XMD-V2.
- */
 require('dotenv').config();
+
+// 🧹 Filtre les logs bruyants de Baileys/libsignal — bug connu qui affiche
+// l'intégralité d'une session cryptographique (avec clés) à chaque fermeture
+// de session, ce qui remplit la mémoire des logs et provoque des crashes.
+const _origConsoleLog = console.log;
+console.log = (...args) => {
+    const first = args[0];
+    if (typeof first === 'string' && (
+        first.startsWith('Closing session') ||
+        first.startsWith('Closing stale open session') ||
+        first.startsWith('Closing open session')
+    )) {
+        return;
+    }
+    _origConsoleLog(...args);
+};
+
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
