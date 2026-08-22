@@ -70,7 +70,28 @@ setInterval(() => {
 }, 30_000) // check every 30 seconds
 
 let phoneNumber = "224666952949"
-let owner = JSON.parse(fs.readFileSync('./data/owner.json'))
+
+// ✅ FIX 1: Créer le dossier data s'il n'existe pas
+const dataDir = './data';
+if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+}
+
+// ✅ FIX 2: Créer owner.json s'il n'existe pas
+const ownerFile = path.join(dataDir, 'owner.json');
+let owner;
+try {
+    if (fs.existsSync(ownerFile)) {
+        owner = JSON.parse(fs.readFileSync(ownerFile));
+    } else {
+        // Créer un fichier par défaut
+        owner = ["224666952949"];
+        fs.writeFileSync(ownerFile, JSON.stringify(owner, null, 2));
+    }
+} catch (err) {
+    console.error('Erreur lecture owner.json:', err.message);
+    owner = ["224666952949"];
+}
 
 global.botname = "ITACHI-XMD"
 global.themeemoji = "•"
@@ -194,8 +215,9 @@ async function startXeonBotInc() {
         }
     })
 
+    // ✅ FIX 3: Déclarer 'id' correctement
     XeonBotInc.getName = (jid, withoutContact = false) => {
-        id = XeonBotInc.decodeJid(jid)
+        let id = XeonBotInc.decodeJid(jid)
         withoutContact = XeonBotInc.withoutContact || withoutContact
         let v
         if (id.endsWith("@g.us")) return new Promise(async (resolve) => {
@@ -224,7 +246,7 @@ async function startXeonBotInc() {
         if (!!global.phoneNumber) {
             phoneNumber = global.phoneNumber
         } else {
-            phoneNumber = await question(chalk.bgBlack(chalk.greenBright(`𝐌𝐄𝐓𝐓𝐄𝐙 𝐕𝐎𝐓𝐑𝐄 𝐍𝐔𝐌𝐄𝐑𝐎 𝐈𝐂𝐈 😍\n𝐅𝐎𝐑𝐌𝐀𝐓: 𝐍𝐎𝐓𝐑𝐄 𝐍𝐔𝐌𝐄𝐑𝐎 (𝐒𝐀𝐍𝐒 + 𝐍𝐈 𝐒𝐏𝐀𝐂𝐄𝐒) : `)))
+            phoneNumber = await question(chalk.bgBlack(chalk.greenBright(`𝐌𝐄𝐓𝐓𝐄𝐙 𝐕𝐎𝐓𝐑𝐄 𝐍𝐔𝐌𝐄𝐑𝐎 𝐈𝐂𝐈 😍\n𝐅𝐎𝐑𝐌𝐀𝐓: 𝐍𝐮𝐦𝐞𝐫𝐨 𝐢𝐧𝐭𝐞𝐫𝐧𝐚𝐭𝐢𝐨𝐧𝐚𝐥 𝐞𝐱: 224666952949\n`)))
         }
 
         // Clean the phone number - remove any non-digit characters
@@ -242,7 +264,7 @@ async function startXeonBotInc() {
                 let code = await XeonBotInc.requestPairingCode(phoneNumber)
                 code = code?.match(/.{1,4}/g)?.join("-") || code
                 console.log(chalk.black(chalk.bgGreen(`Your Pairing Code : `)), chalk.black(chalk.white(code)))
-                console.log(chalk.yellow(`\nPlease enter this code in your WhatsApp app:\n1. Open WhatsApp\n2. Go to Settings > Linked Devices\n3. Tap "Link a Device"\n4. Enter the code shown above`))
+                console.log(chalk.yellow(`\nPlease enter this code in your WhatsApp app:\n1. Open WhatsApp\n2. Go to Settings > Linked Devices\n3. Tap "Link a Device"\n4. Enter the code shown above\n`))
             } catch (error) {
                 console.error('Error requesting pairing code:', error)
                 console.log(chalk.red('Failed to get pairing code. Please check your phone number and try again.'))
@@ -283,7 +305,7 @@ async function startXeonBotInc() {
 
                 await XeonBotInc.sendMessage(botNumber, {
                     image: { url: 'https://i.ibb.co/xSScX4bP/file-0000000060a471fd918d46d4c7c69a21.png' },
-                    caption: `╔══════════════════════╗\n║   🥷 *𝗜𝗧𝗔𝗖𝗛𝗜-𝗫𝗠𝗗-𝐕2* 🥷   ║\n╠══════════════════════╣\n║   🟢 *BOT CONNECTÉ !*      ║\n╚══════════════════════╝\n\n🤖 *${settings.botName || 'ITACHI-XMD'}* est en ligne !\n\n┌──────────────────────\n│ ⏰ *Heure    :* ${timeStr}\n│ ✅ *Statut   :* En ligne & Prêt\n│ 📦 *Version  :* v${settings.version || '2.0.0'}\n│ ⚙️ *Préfixe  :* \`${p}\`\n│ 🌍 *Mode     :* Public\n└──────────────────────\n\n💡 *Commandes rapides :*\n┌──────────────────────\n│ ⬡ \`${p}menu\`  → Menu principal\n│ ⬡ \`${p}help\`  → Aide\n│ ⬡ \`${p}ping\`  → Test vitesse\n│ ⬡ \`${p}alive\` → État du bot\n└──────────────────────\n\n📢 *Rejoins notre chaîne officielle !*\n\n> _Propulsé par 🥷 *IBSACKO™ · CENTRAL HEX*_`,
+                    caption: `╔══════════════════════╗\n║   🥷 *𝗜𝗧𝗔𝗖𝗛𝗜-𝗫𝗠𝗗-𝐕2* 🥷   ║\n╠══════════════════════╣\n║ 🤖 Status: Online\n║ ⏰ Time: ${timeStr}\n║ 🎯 Prefix: ${p}\n╚══════════════════════╝`,
                     contextInfo: channelInfo
                 });
             } catch (error) {
@@ -399,6 +421,16 @@ async function startXeonBotInc() {
     return XeonBotInc;
     } catch (error) {
         console.error('Error in startXeonBotInc:', error)
+        // ✅ FIX 4: Éviter boucle infinie avec un compteur
+        if (!global.restartAttempts) global.restartAttempts = 0;
+        global.restartAttempts++;
+        
+        if (global.restartAttempts > 5) {
+            console.error('🛑 Too many restart attempts. Exiting...');
+            process.exit(1);
+        }
+        
+        console.log(`⏳ Redémarrage dans 5 secondes (tentative ${global.restartAttempts}/5)...`);
         await delay(5000)
         startXeonBotInc()
     }
@@ -638,6 +670,7 @@ global.startUserSession = startUserSession;
 // Démarrer le serveur API
 createApiServer(() => globalSocket);
 
+// ✅ FIX 5: Meilleur gestion du démarrage
 startXeonBotInc().catch(error => {
     console.error('Fatal error:', error)
     process.exit(1)
@@ -659,4 +692,3 @@ fs.watchFile(file, () => {
     delete require.cache[file]
     require(file)
 })
-
