@@ -5,7 +5,7 @@ const settings = {
   author: process.env.PACK_AUTHOR || 'IBSACKO',
   botName: process.env.BOT_NAME || 'ITACHI-XMD',
   botOwner: process.env.OWNER_NAME || 'Ibrahima sory sacko',
-  ownerNumber: process.env.OWNER_NUMBER || '224621963059',
+  ownerNumber: process.env.OWNER_NUMBER || '224662675862',
   prefix: process.env.PREFIX || '.',
   giphyApiKey: process.env.GIPHY_API_KEY || 'qnl7ssQChTdPjsKta2Ax2LMaGXz303tq',
   commandMode: process.env.COMMAND_MODE || 'public',
@@ -19,4 +19,3 @@ const settings = {
 };
 
 module.exports = settings;
-
