@@ -54,6 +54,15 @@ async function startUserSession(number, { usePairingCode = false } = {}) {
     if (connectingLock.has(id)) return sessions[id];
     connectingLock.add(id);
 
+    // 🧹 Nettoyage de l'ancien socket avant de recréer une nouvelle session,
+    // pour éviter que les anciens listeners / caches restent en mémoire.
+    if (sessions[id]?.sock) {
+        try {
+            sessions[id].sock.ev.removeAllListeners();
+            sessions[id].sock.ws?.close();
+        } catch {}
+    }
+
     const sessionDir = path.join(SESSIONS_DIR, id);
     if (!fs.existsSync(sessionDir)) fs.mkdirSync(sessionDir, { recursive: true });
 
